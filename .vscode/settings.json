@@ -1,0 +1,13 @@
+{
+    "dart.sdkPath": "C:\\src\\flutter\\bin\\cache\\dart-sdk",
+    "dart.flutterSdkPath": "C:\\src\\flutter",
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "editor.rulers": [
+        80
+    ],
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit"
+    },
+    "dart.lineLength": 80
+} 
