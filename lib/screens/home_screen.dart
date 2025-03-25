@@ -54,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
           
           // Mise à jour des compteurs basée sur toutes les livraisons
           _livraisonsEnAttente = allLivraisons.where((l) => 
-              l.status == 'en_attente' || l.status == 'en_cours').length;
+              l.status == 'en_attente').length;
           _livraisonsLivrees = allLivraisons.where((l) => 
               l.status == 'livre').length;
           _livraisonsNonLivrees = allLivraisons.where((l) => 
@@ -110,9 +110,12 @@ class _HomeScreenState extends State<HomeScreen> {
           id: livraison.id,
           reference: livraison.reference,
           clientNom: livraison.clientNom,
+          clientPrenom: livraison.clientPrenom,
+          clientEmail: livraison.clientEmail,
           clientAdresse: livraison.clientAdresse,
           clientTelephone: livraison.clientTelephone,
           villeClient: livraison.villeClient,
+          codePostal: livraison.codePostal,
           status: status,
           commentaire: commentaire ?? livraison.commentaire,
           dateCommande: livraison.dateCommande,
@@ -125,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _livraisons = _livraisons.map((l) => l.id == livraison.id ? updatedLivraison : l).toList();
           
           // Mettre à jour les compteurs
-          _livraisonsEnAttente = _livraisons.where((l) => l.status == 'en_attente' || l.status == 'en_cours').length;
+          _livraisonsEnAttente = _livraisons.where((l) => l.status == 'en_attente').length;
           _livraisonsLivrees = _livraisons.where((l) => l.status == 'livre').length;
           _livraisonsNonLivrees = _livraisons.where((l) => l.status == 'non_livre').length;
         });
@@ -550,11 +553,6 @@ class _HomeScreenState extends State<HomeScreen> {
         statusColor = Colors.orange;
         statusIcon = Icons.pending_actions;
         statusText = 'En attente';
-        break;
-      case 'en_cours':
-        statusColor = Colors.blue;
-        statusIcon = Icons.local_shipping;
-        statusText = 'En cours';
         break;
       case 'livre':
         statusColor = Colors.green;

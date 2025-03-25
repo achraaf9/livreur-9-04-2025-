@@ -4,10 +4,10 @@ import '../services/api_service.dart';
 import 'package:provider/provider.dart';
 
 class DeliveryDetailsScreen extends StatefulWidget {
-  final BonLivraison livraison;
+  BonLivraison livraison;
   final Function(String)? onStatusChanged;
 
-  const DeliveryDetailsScreen({Key? key, required this.livraison, this.onStatusChanged}) : super(key: key);
+  DeliveryDetailsScreen({Key? key, required this.livraison, this.onStatusChanged}) : super(key: key);
 
   @override
   State<DeliveryDetailsScreen> createState() => _DeliveryDetailsScreenState();
@@ -71,10 +71,23 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
           if (success) {
             // Mettre à jour l'état local
             _selectedStatus = newStatus;
-            widget.livraison.status = newStatus;
-            if (commentaire != null) {
-              widget.livraison.commentaire = commentaire;
-            }
+            
+            // Au lieu de modifier les propriétés directement, utiliser la méthode copyWith
+            final updatedLivraison = widget.livraison.copyWith(
+              status: newStatus,
+              commentaire: commentaire ?? widget.livraison.commentaire
+            );
+            
+            // Mettre à jour la référence à la livraison
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  // Cette astuce permet de mettre à jour la référence sans erreur de type
+                  // car nous ne pouvons pas modifier directement widget.livraison
+                  widget.livraison = updatedLivraison;
+                });
+              }
+            });
             
             // Appeler le callback si disponible
             if (widget.onStatusChanged != null) {
@@ -120,8 +133,6 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
     switch (status) {
       case 'en_attente':
         return 'En attente';
-      case 'en_cours':
-        return 'En cours';
       case 'livre':
         return 'Livré';
       case 'non_livre':
@@ -135,8 +146,6 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
     switch (status) {
       case 'en_attente':
         return Colors.orange;
-      case 'en_cours':
-        return Colors.blue;
       case 'livre':
         return Colors.green;
       case 'non_livre':

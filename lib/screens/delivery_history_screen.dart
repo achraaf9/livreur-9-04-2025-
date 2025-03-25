@@ -43,17 +43,12 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
       // Initialisation du service API
       final apiService = Provider.of<ApiService>(context, listen: false);
       
-      // Récupérer les livraisons depuis l'API
+      // Récupérer toutes les livraisons depuis l'API sans filtrage
       final livraisons = await apiService.getLivraisonsByAgent(widget.agent.id);
-      
-      // Filtrer seulement les livraisons complétées (livrées ou non livrées)
-      final livraisonsCompleted = livraisons
-          .where((l) => l.status == 'livré' || l.status == 'non_livré')
-          .toList();
       
       if (mounted) {
         setState(() {
-          _livraisons = livraisonsCompleted;
+          _livraisons = livraisons; // Afficher toutes les livraisons sans filtrage
           _isLoading = false;
         });
       }
@@ -79,8 +74,6 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
         return 'En attente';
       case 'livre':
         return 'Livré';
-      case 'en_cours':
-        return 'En cours';
       case 'non_livre':
         return 'Non livré';
       default:
@@ -94,8 +87,6 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
         return Colors.orange;
       case 'livre':
         return Colors.green;
-      case 'en_cours':
-        return Colors.amber;
       case 'non_livre':
         return Colors.red;
       default:
@@ -109,8 +100,6 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
         return Icons.pending;
       case 'livre':
         return Icons.check_circle;
-      case 'en_cours':
-        return Icons.local_shipping;
       case 'non_livre':
         return Icons.cancel;
       default:
@@ -163,7 +152,6 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
                   const SizedBox(width: 8),
                   _buildFilterChip('Non livrées', 'non_livre'),
                   const SizedBox(width: 8),
-                  _buildFilterChip('En cours', 'en_cours'),
                 ],
               ),
             ),

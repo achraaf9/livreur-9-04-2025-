@@ -57,10 +57,9 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
       
       if (mounted) {
         setState(() {
-          // Ne garder que les livraisons en attente ou en cours
+          // Ne garder que les livraisons en attente
           _livraisons = livraisons.where((livraison) => 
-            livraison.status == 'en_attente' || 
-            livraison.status == 'en_cours').toList();
+            livraison.status == 'en_attente').toList();
           
           // Ajouter le nombre de livraisons filtrées aux infos de débogage
           _debugInfo['totalEnAttente'] = _livraisons.length;
@@ -96,10 +95,9 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
       
       if (mounted) {
         setState(() {
-          // Ne garder que les livraisons en attente ou en cours
+          // Ne garder que les livraisons en attente
           _livraisons = livraisons.where((livraison) => 
-            livraison.status == 'en_attente' || 
-            livraison.status == 'en_cours').toList();
+            livraison.status == 'en_attente').toList();
           _errorMessage = '';
         });
       }
@@ -147,13 +145,16 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
         if (success) {
           // Mettre à jour l'état local
           setState(() {
-            livraison.status = status;
-            if (commentaire != null) {
-              livraison.commentaire = commentaire;
+            final updatedLivraison = livraison.copyWith(status: status, commentaire: commentaire ?? livraison.commentaire);
+            
+            // Remplacer la livraison dans la liste
+            final index = _livraisons.indexWhere((l) => l.id == livraison.id);
+            if (index != -1) {
+              _livraisons[index] = updatedLivraison;
             }
             
-            // Retirer la livraison de la liste si son statut n'est plus en attente ou en cours
-            if (status != 'en_attente' && status != 'en_cours') {
+            // Retirer la livraison de la liste si son statut n'est plus en attente
+            if (status != 'en_attente') {
               _livraisons.removeWhere((l) => l.id == livraison.id);
             }
           });
@@ -382,11 +383,17 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
                 onStatusChanged: (newStatus) {
                   // Cette fonction est appelée si le statut est changé depuis l'écran de détails
                   setState(() {
-                    // Mettre à jour le statut localement
-                    livraison.status = newStatus;
+                    // Mettre à jour le statut localement avec copyWith
+                    final updatedLivraison = livraison.copyWith(status: newStatus);
                     
-                    // Retirer la livraison de la liste si son statut n'est plus en attente ou en cours
-                    if (newStatus != 'en_attente' && newStatus != 'en_cours') {
+                    // Remplacer la livraison dans la liste
+                    final index = _livraisons.indexWhere((l) => l.id == livraison.id);
+                    if (index != -1) {
+                      _livraisons[index] = updatedLivraison;
+                    }
+                    
+                    // Retirer la livraison de la liste si son statut n'est plus en attente
+                    if (newStatus != 'en_attente') {
                       _livraisons.removeWhere((l) => l.id == livraison.id);
                     }
                   });
@@ -398,7 +405,7 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
           // Si le résultat est true, cela signifie que le statut a été mis à jour
           if (result == true) {
             // Vérifier si la livraison doit être retirée de la liste
-            if (livraison.status != 'en_attente' && livraison.status != 'en_cours') {
+            if (livraison.status != 'en_attente') {
               setState(() {
                 _livraisons.removeWhere((l) => l.id == livraison.id);
               });
@@ -478,7 +485,7 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
                       foregroundColor: Colors.blue,
                     ),
                   ),
-                  if (livraison.status == 'en_attente' || livraison.status == 'en_cours')
+                  if (livraison.status == 'en_attente')
                     ElevatedButton.icon(
                       onPressed: () => _showConfirmationDialog(livraison),
                       icon: const Icon(Icons.check_circle),
@@ -488,7 +495,7 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
                         foregroundColor: Colors.white,
                       ),
                     ),
-                  if (livraison.status == 'en_attente' || livraison.status == 'en_cours')
+                  if (livraison.status == 'en_attente')
                     TextButton.icon(
                       onPressed: () => _showNonLivreDialog(livraison),
                       icon: const Icon(Icons.cancel),
@@ -512,8 +519,6 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
         return Colors.green;
       case 'non_livre':
         return Colors.orange;
-      case 'en_cours':
-        return Colors.amber;
       case 'en_attente':
       default:
         return Colors.blue;
@@ -526,8 +531,6 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
         return Icons.check_circle;
       case 'non_livre':
         return Icons.cancel;
-      case 'en_cours':
-        return Icons.local_shipping;
       case 'en_attente':
       default:
         return Icons.pending;
@@ -540,8 +543,6 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
         return 'Livré';
       case 'non_livre':
         return 'Non livré';
-      case 'en_cours':
-        return 'En cours de livraison';
       case 'en_attente':
         return 'En attente';
       default:
