@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+import 'dart:developer' as developer;
 import '../services/api_service.dart';
+import '../config/api_config.dart';
+import '../services/api_logger.dart';
 import 'home_screen.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:math' as math;
+import 'package:provider/provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,6 +21,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  String _errorMessage = '';
+  String _infoMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // Champs laissés vides - les utilisateurs doivent saisir leurs identifiants
+  }
 
   @override
   void dispose() {
@@ -22,59 +37,81 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _login() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez remplir tous les champs')),
-      );
-      return;
-    }
-
+  void _login() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = '';
+      _infoMessage = 'Tentative de connexion...';
     });
-
+    
     try {
-      final apiService = await ApiService.getInstance();
+      String email = _emailController.text.trim();
+      String password = _passwordController.text.trim();
       
-      // Authentification avec données statiques
-      final agent = await apiService.authenticateAgent(
-        _emailController.text,
-        _passwordController.text,
-      );
-
-      if (mounted) {
+      if (email.isEmpty || password.isEmpty) {
         setState(() {
           _isLoading = false;
+          _errorMessage = 'Veuillez remplir tous les champs';
+          _infoMessage = '';
         });
-
-        if (agent != null) {
+        return;
+      }
+      
+      // Initialisation du service API
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      
+      // Appel à l'API pour l'authentification
+      final agent = await apiService.authAgent(email, password);
+      
+      if (mounted) {
+        if (agent == null) {
+          // L'authentification a échoué
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Email ou mot de passe incorrect.';
+            _infoMessage = '';
+          });
+          return;
+        }
+        
+        setState(() {
+          _infoMessage = 'Authentification réussie !';
+        });
+        
+        // Attendre un court instant pour montrer le message de succès
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        // Si l'authentification est réussie, naviguer vers l'écran d'accueil
+        if (mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (context) => HomeScreen(agent: agent),
             ),
           );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Email ou mot de passe incorrect'),
-              backgroundColor: Colors.red,
-            ),
-          );
         }
       }
     } catch (e) {
       if (mounted) {
+        // Formater le message d'erreur
+        String errorMsg = e.toString();
+        
+        // Supprimer "Exception: " du début du message
+        if (errorMsg.startsWith('Exception: ')) {
+          errorMsg = errorMsg.substring(11);
+        }
+        
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Erreur de connexion. Veuillez réessayer.';
+          _infoMessage = '';
+        });
+      }
+    } finally {
+      if (mounted) {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur de connexion: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
     }
   }
@@ -161,41 +198,39 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                   ),
                 ),
-                const SizedBox(height: 16),
                 
-                // Message d'aide avec indication sur les données statiques
-                Column(
-                  children: const [
-                    Text(
-                      'Utilisez les identifiants suivants pour vous connecter:',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'karim.alami@gmail.com / password123',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Application fonctionnant avec des données statiques',
-                      style: TextStyle(
+                // Message d'information (comme "Connexion en cours...")
+                if (_infoMessage.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16.0),
+                    child: Text(
+                      _infoMessage,
+                      style: const TextStyle(
                         color: Colors.blue,
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic
+                        fontWeight: FontWeight.bold,
                       ),
-                      textAlign: TextAlign.center,
                     ),
-                  ],
-                ),
+                  ),
+                
+                // Message d'erreur
+                if (_errorMessage.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red),
+                      ),
+                      child: Text(
+                        _errorMessage,
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

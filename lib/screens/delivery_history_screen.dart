@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import 'delivery_details_screen.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
+import 'package:provider/provider.dart';
 
 class DeliveryHistoryScreen extends StatefulWidget {
   final Agent agent;
@@ -37,67 +38,39 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
     setState(() {
       _isLoading = true;
     });
-
+    
     try {
-      final apiService = await ApiService.getInstance();
+      // Initialisation du service API
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      
+      // Récupérer les livraisons depuis l'API
       final livraisons = await apiService.getLivraisonsByAgent(widget.agent.id);
+      
+      // Filtrer seulement les livraisons complétées (livrées ou non livrées)
+      final livraisonsCompleted = livraisons
+          .where((l) => l.status == 'livré' || l.status == 'non_livré')
+          .toList();
       
       if (mounted) {
         setState(() {
-          _livraisons = livraisons;
+          _livraisons = livraisonsCompleted;
           _isLoading = false;
         });
       }
     } catch (e) {
-      print('Erreur lors du chargement des livraisons: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
-          // Générer des données de test en cas d'échec
-          _generateTestData();
         });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors du chargement des livraisons: $e\nUtilisation de données de test.'),
-            backgroundColor: Colors.orange,
+            content: Text('Erreur lors du chargement de l\'historique: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
     }
-  }
-  
-  // Méthode pour générer des données de test
-  void _generateTestData() {
-    final random = Random();
-    final villes = ['Casablanca', 'Rabat', 'Marrakech', 'Agadir', 'Tanger', 'Fès'];
-    final statuses = ['en_attente', 'en_cours', 'livre', 'non_livre'];
-    
-    // Générer 20 livraisons aléatoires avec différents statuts
-    _livraisons = List.generate(20, (index) {
-      final id = index + 1;
-      // Pour l'historique, favoriser les statuts livrés et non livrés
-      final statusIndex = random.nextInt(4); // 0,1,2,3
-      final status = statusIndex < 2 ? 
-          (random.nextBool() ? 'livre' : 'non_livre') : 
-          statuses[random.nextInt(statuses.length)];
-      
-      final dateCommande = DateTime.now().subtract(Duration(days: random.nextInt(60)));
-      final dateLivraison = dateCommande.add(Duration(days: random.nextInt(7) + 1));
-      
-      return BonLivraison(
-        id: id,
-        reference: 'BL-${2023}-${1000 + id}',
-        clientNom: 'Client ${id}',
-        clientAdresse: 'Adresse ${id}, Rue ${random.nextInt(100)}',
-        clientTelephone: '06${random.nextInt(90000000) + 10000000}',
-        villeClient: villes[random.nextInt(villes.length)],
-        status: status,
-        commentaire: status == 'non_livre' ? 'Client absent ou refus de livraison' : (status == 'livre' ? 'Livré avec succès' : ''),
-        dateCommande: '${dateCommande.day}/${dateCommande.month}/${dateCommande.year}',
-        dateLivraison: '${dateLivraison.day}/${dateLivraison.month}/${dateLivraison.year}',
-        montantTotal: (random.nextDouble() * 1000 + 500).roundToDouble(),
-      );
-    });
   }
 
   String _getStatusText(String status) {

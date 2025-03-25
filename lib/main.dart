@@ -5,15 +5,31 @@ import 'services/api_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'models/agent.dart';
+import 'package:flutter/foundation.dart';
+import 'config/api_config.dart';
+import 'dart:developer' as developer;
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   
-  print('Démarrage de l\'application avec données statiques...');
+  // Activer le mode verbose pour le débogage en développement
+  if (kDebugMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {
+      if (message != null) {
+        developer.log(message, name: 'App');
+      }
+    };
+  }
   
-  // Initialiser le service API avec des données statiques
-  final apiService = await ApiService.getInstance();
-  print('Service API avec données statiques initialisé avec succès');
+  debugPrint('====== DÉMARRAGE DE L\'APPLICATION ======');
+  debugPrint('Mode connexion à la base de données activé');
+  
+  // Afficher la configuration de l'API au démarrage
+  debugPrint('URL de base de l\'API: ${ApiConfig.baseUrl}');
+  debugPrint('URLs de login: ${ApiConfig.loginUrls.join(', ')}');
+  
+  // Initialiser le service API
+  final apiService = ApiService();
   
   runApp(
     MultiProvider(

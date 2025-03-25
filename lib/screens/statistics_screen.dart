@@ -4,6 +4,7 @@ import '../models/bon_livraison.dart';
 import '../services/api_service.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:math';
+import 'package:provider/provider.dart';
 
 class StatisticsScreen extends StatefulWidget {
   final Agent agent;
@@ -30,78 +31,45 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Future<void> _loadStatistics() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
     try {
-      final apiService = await ApiService.getInstance();
+      // Initialisation du service API
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      
+      // Récupération des livraisons pour calculer les statistiques
       final livraisons = await apiService.getLivraisonsByAgent(widget.agent.id);
       
       if (mounted) {
         setState(() {
           _livraisons = livraisons;
-          _totalLivraisons = livraisons.length;
-          _livraisonsLivrees = livraisons.where((l) => l.status == 'livre').length;
-          _livraisonsNonLivrees = livraisons.where((l) => l.status == 'non_livre').length;
-          _livraisonsEnAttente = livraisons.where((l) => l.status == 'en_attente' || l.status == 'en_cours').length;
-          
-          final completed = _livraisonsLivrees + _livraisonsNonLivrees;
-          _tauxReussite = completed > 0 
-              ? (_livraisonsLivrees / completed) * 100 
-              : 0.0;
-          
+          _calculerStatistiques(livraisons);
           _isLoading = false;
         });
       }
     } catch (e) {
-      print('Erreur lors du chargement des statistiques: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
-          // Générer des données de test en cas d'échec
-          _generateTestData();
         });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors du chargement des statistiques: $e\nUtilisation de données de test.'),
-            backgroundColor: Colors.orange,
+            content: Text('Erreur lors du chargement des statistiques: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
     }
   }
-  
-  // Méthode pour générer des données de test en cas d'échec de l'API
-  void _generateTestData() {
-    final random = Random();
-    final statuses = ['en_attente', 'en_cours', 'livre', 'non_livre'];
-    final villes = ['Casablanca', 'Rabat', 'Marrakech', 'Agadir', 'Tanger', 'Fès'];
-    
-    // Générer 15 livraisons aléatoires
-    _livraisons = List.generate(15, (index) {
-      final id = index + 1;
-      final status = statuses[random.nextInt(statuses.length)];
-      
-      final dateCommande = DateTime.now().subtract(Duration(days: random.nextInt(30)));
-      final dateLivraison = dateCommande.add(Duration(days: random.nextInt(7) + 1));
-      
-      return BonLivraison(
-        id: id,
-        reference: 'BL-${2023}-${1000 + id}',
-        clientNom: 'Client ${id}',
-        clientAdresse: 'Adresse ${id}, Rue ${random.nextInt(100)}',
-        clientTelephone: '06${random.nextInt(90000000) + 10000000}',
-        villeClient: villes[random.nextInt(villes.length)],
-        status: status,
-        commentaire: status == 'non_livre' ? 'Client absent' : '',
-        dateCommande: '${dateCommande.day}/${dateCommande.month}/${dateCommande.year}',
-        dateLivraison: '${dateLivraison.day}/${dateLivraison.month}/${dateLivraison.year}',
-        montantTotal: (random.nextDouble() * 1000 + 500).roundToDouble(),
-      );
-    });
-    
-    // Mettre à jour les statistiques
-    _totalLivraisons = _livraisons.length;
-    _livraisonsLivrees = _livraisons.where((l) => l.status == 'livre').length;
-    _livraisonsNonLivrees = _livraisons.where((l) => l.status == 'non_livre').length;
-    _livraisonsEnAttente = _livraisons.where((l) => l.status == 'en_attente' || l.status == 'en_cours').length;
+
+  void _calculerStatistiques(List<BonLivraison> livraisons) {
+    _totalLivraisons = livraisons.length;
+    _livraisonsLivrees = livraisons.where((l) => l.status == 'livre').length;
+    _livraisonsNonLivrees = livraisons.where((l) => l.status == 'non_livre').length;
+    _livraisonsEnAttente = livraisons.where((l) => l.status == 'en_attente' || l.status == 'en_cours').length;
     
     final completed = _livraisonsLivrees + _livraisonsNonLivrees;
     _tauxReussite = completed > 0 

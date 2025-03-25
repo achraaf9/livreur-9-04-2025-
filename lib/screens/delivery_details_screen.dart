@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/bon_livraison.dart';
 import '../services/api_service.dart';
+import 'package:provider/provider.dart';
 
 class DeliveryDetailsScreen extends StatefulWidget {
   final BonLivraison livraison;
@@ -30,67 +31,76 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
     super.dispose();
   }
 
-  Future<void> _updateLivraisonStatus(String status) async {
-    String commentaire = _commentaireController.text.trim();
-
-    if (commentaire.isEmpty) {
+  void _updateStatus(String newStatus) async {
+    // Ne rien faire si le statut est déjà le même
+    if (_selectedStatus == newStatus) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Veuillez ajouter un commentaire avant de mettre à jour le statut'),
-          backgroundColor: Colors.red,
+          content: Text('Ce statut est déjà sélectionné'),
+          backgroundColor: Colors.orange,
         ),
       );
       return;
     }
-
+    
     setState(() {
       _isLoading = true;
     });
-
+    
     try {
-      print('Mise à jour du statut de la livraison ID: ${widget.livraison.id} vers $status');
+      // Initialisation du service API
+      final apiService = Provider.of<ApiService>(context, listen: false);
       
-      final apiService = await ApiService.getInstance();
+      // Mise à jour du statut de la livraison
+      String? commentaire;
+      
+      // Si le statut est non_livre, demander un commentaire
+      if (newStatus == 'non_livre' && _commentaireController.text.isNotEmpty) {
+        commentaire = _commentaireController.text;
+      }
+      
       final success = await apiService.updateLivraisonStatus(
-        widget.livraison.id,
-        status,
+        widget.livraison.id, 
+        newStatus,
         commentaire: commentaire,
       );
-
-      print('Résultat de la mise à jour: $success');
       
-      if (success && mounted) {
+      if (mounted) {
         setState(() {
-          _selectedStatus = status;
           _isLoading = false;
+          if (success) {
+            // Mettre à jour l'état local
+            _selectedStatus = newStatus;
+            widget.livraison.status = newStatus;
+            if (commentaire != null) {
+              widget.livraison.commentaire = commentaire;
+            }
+            
+            // Appeler le callback si disponible
+            if (widget.onStatusChanged != null) {
+              widget.onStatusChanged!(newStatus);
+            }
+          }
         });
         
-        // Appeler le callback si disponible
-        if (widget.onStatusChanged != null) {
-          widget.onStatusChanged!(status);
-        }
-        
+        // Afficher un message de confirmation
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Statut mis à jour avec succès'),
-            backgroundColor: Colors.green,
+            content: Text(
+              success 
+                ? 'Statut mis à jour avec succès' 
+                : 'Erreur lors de la mise à jour du statut'
+            ),
+            backgroundColor: success ? Colors.green : Colors.red,
           ),
         );
-      } else if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erreur lors de la mise à jour du statut'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Si la mise à jour est réussie, revenir à l'écran précédent
+        if (success) {
+          Navigator.pop(context, true);
+        }
       }
     } catch (e) {
-      print('Erreur lors de la mise à jour du statut: $e');
-      
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -98,7 +108,7 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors de la mise à jour du statut: $e'),
+            content: Text('Erreur: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -166,10 +176,16 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                             ),
                           ),
                           const Divider(),
-                          _buildInfoRow('Nom', widget.livraison.clientNom),
+                          _buildInfoRow('Nom', widget.livraison.clientPrenom.isNotEmpty 
+                              ? '${widget.livraison.clientPrenom} ${widget.livraison.clientNom}'
+                              : widget.livraison.clientNom),
                           _buildInfoRow('Adresse', widget.livraison.clientAdresse),
                           _buildInfoRow('Téléphone', widget.livraison.clientTelephone),
                           _buildInfoRow('Ville', widget.livraison.villeClient),
+                          if (widget.livraison.codePostal.isNotEmpty)
+                            _buildInfoRow('Code Postal', widget.livraison.codePostal),
+                          if (widget.livraison.clientEmail.isNotEmpty)
+                            _buildInfoRow('Email', widget.livraison.clientEmail),
                         ],
                       ),
                     ),
@@ -251,16 +267,16 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _buildActionButton(
-                        'Livré',
+                        _selectedStatus == 'livre' ? 'Déjà livré' : 'Livré',
                         Colors.green,
-                        Icons.check_circle,
-                        () => _updateLivraisonStatus('livre'),
+                        _selectedStatus == 'livre' ? Icons.check_circle : Icons.check_circle_outline,
+                        () => _updateStatus('livre'),
                       ),
                       _buildActionButton(
-                        'Non livré',
+                        _selectedStatus == 'non_livre' ? 'Déjà marqué comme non livré' : 'Non livré',
                         Colors.red,
-                        Icons.cancel,
-                        () => _updateLivraisonStatus('non_livre'),
+                        _selectedStatus == 'non_livre' ? Icons.cancel : Icons.cancel_outlined,
+                        () => _updateStatus('non_livre'),
                       ),
                     ],
                   ),
@@ -293,9 +309,7 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
 
   Widget _buildActionButton(String label, Color color, IconData icon, VoidCallback onPressed) {
     return ElevatedButton.icon(
-      onPressed: _selectedStatus == 'livre' || _selectedStatus == 'non_livre'
-          ? null
-          : onPressed,
+      onPressed: onPressed,
       icon: Icon(icon),
       label: Text(label),
       style: ElevatedButton.styleFrom(

@@ -25,95 +25,79 @@ class _HomeScreenState extends State<HomeScreen> {
   int _livraisonsEnAttente = 0;
   int _livraisonsLivrees = 0;
   int _livraisonsNonLivrees = 0;
+  String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
-    _loadLivraisons();
+    _fetchLivraisons();
   }
 
-  Future<void> _loadLivraisons() async {
+  Future<void> _fetchLivraisons() async {
     setState(() {
       _isLoading = true;
     });
-
-    print('Début du chargement des livraisons pour l\'agent ID: ${widget.agent.id}');
     
     try {
-      // Récupérer les livraisons depuis l'API
-      final apiService = await ApiService.getInstance();
-      final livraisons = await apiService.getLivraisonsByAgent(widget.agent.id);
+      // Initialisation du service API
+      final apiService = Provider.of<ApiService>(context, listen: false);
       
-      print('Livraisons récupérées avec succès: ${livraisons.length}');
+      // Récupération de toutes les livraisons de l'agent pour calculer les statistiques
+      final allLivraisons = await apiService.getLivraisonsByAgent(widget.agent.id);
+      
+      // Récupération uniquement des livraisons en attente ou en cours pour l'affichage
+      final enAttenteLivraisons = await apiService.getLivraisonsEnAttente(widget.agent.id);
       
       if (mounted) {
-      setState(() {
-        _livraisons = livraisons;
+        setState(() {
+          _livraisons = enAttenteLivraisons;
           
-          // Compter les livraisons par statut
-        _livraisonsEnAttente = livraisons.where((l) => l.status == 'en_attente' || l.status == 'en_cours').length;
-        _livraisonsLivrees = livraisons.where((l) => l.status == 'livre').length;
-        _livraisonsNonLivrees = livraisons.where((l) => l.status == 'non_livre').length;
+          // Mise à jour des compteurs basée sur toutes les livraisons
+          _livraisonsEnAttente = allLivraisons.where((l) => 
+              l.status == 'en_attente' || l.status == 'en_cours').length;
+          _livraisonsLivrees = allLivraisons.where((l) => 
+              l.status == 'livre').length;
+          _livraisonsNonLivrees = allLivraisons.where((l) => 
+              l.status == 'non_livre').length;
           
-        _isLoading = false;
-      });
+          _isLoading = false;
+        });
+        
+        // Afficher un message si des livraisons ont été chargées
+        if (allLivraisons.isNotEmpty && _livraisonsEnAttente > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Vous avez $_livraisonsEnAttente livraisons en attente'),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e) {
-      print('Erreur lors du chargement des livraisons: $e');
       if (mounted) {
-      setState(() {
-        _isLoading = false;
-          // Générer des données de test en cas d'échec de connexion à l'API
-          _generateTestData();
+        setState(() {
+          _errorMessage = 'Erreur: ${e.toString()}';
+          _isLoading = false;
+          // Réinitialiser les compteurs en cas d'erreur
+          _livraisonsEnAttente = 0;
+          _livraisonsLivrees = 0;
+          _livraisonsNonLivrees = 0;
         });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors du chargement des données: $e\nUtilisation de données de test.'),
-            backgroundColor: Colors.orange,
+            content: Text('Erreur lors du chargement des livraisons: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
     }
   }
 
-  // Méthode qui génère des données de test
-  void _generateTestData() {
-    final random = Random();
-    final statuses = ['en_attente', 'en_cours', 'livre', 'non_livre'];
-    final villes = ['Casablanca', 'Rabat', 'Marrakech', 'Agadir', 'Tanger', 'Fès'];
-    
-    // Générer 10 livraisons aléatoires
-    _livraisons = List.generate(10, (index) {
-      final id = index + 1;
-      final status = statuses[random.nextInt(statuses.length)];
-      
-      final dateCommande = DateTime.now().subtract(Duration(days: random.nextInt(30)));
-      final dateLivraison = dateCommande.add(Duration(days: random.nextInt(7) + 1));
-      
-      return BonLivraison(
-        id: id,
-        reference: 'BL-${2023}-${1000 + id}',
-        clientNom: 'Client ${id}',
-        clientAdresse: 'Adresse ${id}, Rue ${random.nextInt(100)}',
-        clientTelephone: '06${random.nextInt(90000000) + 10000000}',
-        villeClient: villes[random.nextInt(villes.length)],
-        status: status,
-        commentaire: status == 'non_livre' ? 'Client absent' : '',
-        dateCommande: '${dateCommande.day}/${dateCommande.month}/${dateCommande.year}',
-        dateLivraison: '${dateLivraison.day}/${dateLivraison.month}/${dateLivraison.year}',
-        montantTotal: (random.nextDouble() * 1000 + 500).roundToDouble(),
-      );
-    });
-    
-    // Mettre à jour les compteurs
-    _livraisonsEnAttente = _livraisons.where((l) => l.status == 'en_attente' || l.status == 'en_cours').length;
-    _livraisonsLivrees = _livraisons.where((l) => l.status == 'livre').length;
-    _livraisonsNonLivrees = _livraisons.where((l) => l.status == 'non_livre').length;
-  }
-
   Future<void> _updateLivraisonStatus(BonLivraison livraison, String status, [String? commentaire]) async {
     try {
-      final apiService = await ApiService.getInstance();
+      final apiService = Provider.of<ApiService>(context, listen: false);
       final success = await apiService.updateLivraisonStatus(
         livraison.id,
         status,
@@ -154,20 +138,12 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: status == 'livre' ? Colors.green : Colors.orange,
           ),
         );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Échec de la mise à jour du statut'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
     } catch (e) {
-      print('Erreur lors de la mise à jour du statut: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors de la mise à jour: $e'),
+            content: Text('Erreur lors de la mise à jour du statut: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -197,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadLivraisons,
+            onPressed: _fetchLivraisons,
           ),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -291,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _loadLivraisons,
+              onRefresh: _fetchLivraisons,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Container(
@@ -395,7 +371,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           )
                         : Column(
                             children: _livraisons
-                                  .take(5)
+                                  .take(3)
                                   .map((livraison) => _buildLivraisonCard(livraison))
                                 .toList(),
                           ),
@@ -615,19 +591,28 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-        child: Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+            children: [
+              // ID Commande (Référence) et statut
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      livraison.reference,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.receipt, size: 16, color: Colors.blue),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            "ID: ${livraison.reference}",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Container(
@@ -656,65 +641,63 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                livraison.clientNom,
-                style: const TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 4),
+              
+              // Nom du client
               Row(
                 children: [
-                  const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                  const Icon(Icons.person, size: 16, color: Colors.blue),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      '${livraison.clientAdresse}, ${livraison.villeClient}',
+                      "Client: ${livraison.clientNom}",
                       style: const TextStyle(
                         fontSize: 14,
-                        color: Colors.grey,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              
+              // Ville
+              Row(
+                children: [
+                  const Icon(Icons.location_city, size: 16, color: Colors.blue),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      "Ville: ${livraison.villeClient}",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              
+              // Adresse (région)
+              Row(
+                children: [
+                  const Icon(Icons.location_on, size: 16, color: Colors.blue),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      "Adresse: ${livraison.clientAdresse}",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
                       ),
                     ),
                   ),
                 ],
               ),
             ],
-            ),
+          ),
         ),
       ),
     );
-  }
-
-  // Méthode pour créer des données de test
-  Future<void> _createTestData() async {
-    try {
-      setState(() {
-        _isLoading = true;
-      });
-      
-      // Générer de nouvelles données de test
-      _generateTestData();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Données de test créées avec succès'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Erreur lors de la création des données de test: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
-        );
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
   }
 } 

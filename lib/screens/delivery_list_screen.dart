@@ -19,6 +19,9 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
   List<BonLivraison> _livraisons = [];
   bool _isLoading = true;
   String _errorMessage = '';
+  bool _isUpdating = false;
+  // Variable pour stocker les informations de débogage (gardée pour référence mais non affichée)
+  Map<String, dynamic> _debugInfo = {};
 
   @override
   void initState() {
@@ -29,33 +32,54 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
   Future<void> _loadLivraisons() async {
     setState(() {
       _isLoading = true;
+      _debugInfo = {}; // Réinitialiser les infos de débogage
     });
-
-    print('Début du chargement des livraisons en attente pour l\'agent ID: ${widget.agent.id}');
     
     try {
-      final apiService = await ApiService.getInstance();
+      // Initialisation du service API
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      
+      // Récupérer les livraisons depuis l'API
       final livraisons = await apiService.getLivraisonsByAgent(widget.agent.id);
       
-      print('Livraisons récupérées avec succès: ${livraisons.length}');
+      // Afficher le nombre de livraisons récupérées
+      debugPrint('🚚 Nombre de livraisons récupérées: ${livraisons.length}');
+      
+      // Stocker les IDs des livraisons pour le débogage
+      List<int> livraisonsIds = livraisons.map((l) => l.id).toList();
+      debugPrint('🚚 IDs des livraisons: $livraisonsIds');
+      
+      // Stocker ces informations pour l'affichage de débogage
+      _debugInfo = {
+        'totalRecupere': livraisons.length,
+        'ids': livraisonsIds,
+      };
       
       if (mounted) {
         setState(() {
-          _livraisons = livraisons.where((l) => l.status == 'en_attente' || l.status == 'en_cours').toList();
+          // Ne garder que les livraisons en attente ou en cours
+          _livraisons = livraisons.where((livraison) => 
+            livraison.status == 'en_attente' || 
+            livraison.status == 'en_cours').toList();
+          
+          // Ajouter le nombre de livraisons filtrées aux infos de débogage
+          _debugInfo['totalEnAttente'] = _livraisons.length;
+          
           _isLoading = false;
           _errorMessage = '';
         });
       }
     } catch (e) {
-      print('Erreur lors du chargement des livraisons: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Erreur: $e';
+          _errorMessage = 'Erreur lors du chargement des livraisons: $e';
+          _debugInfo['error'] = e.toString();
         });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors du chargement des données: $e'),
+            content: Text(_errorMessage),
             backgroundColor: Colors.red,
           ),
         );
@@ -63,89 +87,101 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
     }
   }
 
-  // Méthode pour générer des données de test
-  void _generateTestData() {
-    final random = Random();
-    final statuses = ['en_attente', 'en_cours'];
-    final villes = ['Casablanca', 'Rabat', 'Marrakech', 'Agadir', 'Tanger', 'Fès'];
+  Future<void> _refreshLivraisons() async {
+    // Initialisation du service API
+    final apiService = Provider.of<ApiService>(context, listen: false);
     
-    // Générer 5 livraisons en attente aléatoires
-    _livraisons = List.generate(5, (index) {
-      final id = index + 1;
-      final status = statuses[random.nextInt(statuses.length)];
+    try {
+      final livraisons = await apiService.getLivraisonsByAgent(widget.agent.id);
       
-      final dateCommande = DateTime.now().subtract(Duration(days: random.nextInt(7)));
-      final dateLivraison = dateCommande.add(Duration(days: random.nextInt(3) + 1));
+      if (mounted) {
+        setState(() {
+          // Ne garder que les livraisons en attente ou en cours
+          _livraisons = livraisons.where((livraison) => 
+            livraison.status == 'en_attente' || 
+            livraison.status == 'en_cours').toList();
+          _errorMessage = '';
+        });
+      }
       
-      return BonLivraison(
-        id: id,
-        reference: 'BL-${2023}-${1000 + id}',
-        clientNom: 'Client ${id}',
-        clientAdresse: 'Adresse ${id}, Rue ${random.nextInt(100)}',
-        clientTelephone: '06${random.nextInt(90000000) + 10000000}',
-        villeClient: villes[random.nextInt(villes.length)],
-        status: status,
-        commentaire: '',
-        dateCommande: '${dateCommande.day}/${dateCommande.month}/${dateCommande.year}',
-        dateLivraison: '${dateLivraison.day}/${dateLivraison.month}/${dateLivraison.year}',
-        montantTotal: (random.nextDouble() * 1000 + 500).roundToDouble(),
-      );
-    });
+      return;
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Erreur lors de l\'actualisation: $e';
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_errorMessage),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      
+      throw e; // Pour indiquer à RefreshIndicator que le rafraîchissement a échoué
+    }
   }
 
   Future<void> _updateLivraisonStatus(BonLivraison livraison, String status, [String? commentaire]) async {
-    if (commentaire == null || commentaire.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez ajouter un commentaire avant de changer le statut'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
+    setState(() {
+      _isUpdating = true;
+    });
+    
     try {
-      print('Mise à jour du statut de la livraison ID: ${livraison.id} vers $status');
+      // Initialisation du service API
+      final apiService = Provider.of<ApiService>(context, listen: false);
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Mise à jour du statut en cours...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-      
-      final apiService = await ApiService.getInstance();
+      // Mise à jour du statut
       final success = await apiService.updateLivraisonStatus(
         livraison.id,
         status,
         commentaire: commentaire,
       );
-
-      print('Résultat de la mise à jour: $success');
-      if (success && mounted) {
-        await _loadLivraisons();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(status == 'livre' 
-                ? 'Livraison confirmée avec succès' 
-                : 'Livraison marquée comme non livrée'),
-            backgroundColor: status == 'livre' ? Colors.green : Colors.orange,
-          ),
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erreur lors de la mise à jour du statut'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+        
+        if (success) {
+          // Mettre à jour l'état local
+          setState(() {
+            livraison.status = status;
+            if (commentaire != null) {
+              livraison.commentaire = commentaire;
+            }
+            
+            // Retirer la livraison de la liste si son statut n'est plus en attente ou en cours
+            if (status != 'en_attente' && status != 'en_cours') {
+              _livraisons.removeWhere((l) => l.id == livraison.id);
+            }
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Statut mis à jour avec succès'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Échec de la mise à jour du statut'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
-      print('Erreur lors de la mise à jour du statut: $e');
       if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors de la mise à jour du statut: $e'),
+            content: Text('Erreur lors de la mise à jour: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -261,42 +297,6 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
     );
   }
 
-  Future<void> _createTestData() async {
-    try {
-      setState(() {
-        _isLoading = true;
-      });
-      
-      // Générer des données de test
-      _generateTestData();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Données de test créées avec succès'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Erreur lors de la création des données de test: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
   void _navigateToDeliveryDetails(BonLivraison livraison) {
     Navigator.push(
       context,
@@ -379,13 +379,30 @@ class _DeliveryListScreenState extends State<DeliveryListScreen> {
             MaterialPageRoute(
               builder: (context) => DeliveryDetailsScreen(
                 livraison: livraison,
+                onStatusChanged: (newStatus) {
+                  // Cette fonction est appelée si le statut est changé depuis l'écran de détails
+                  setState(() {
+                    // Mettre à jour le statut localement
+                    livraison.status = newStatus;
+                    
+                    // Retirer la livraison de la liste si son statut n'est plus en attente ou en cours
+                    if (newStatus != 'en_attente' && newStatus != 'en_cours') {
+                      _livraisons.removeWhere((l) => l.id == livraison.id);
+                    }
+                  });
+                },
               ),
             ),
           );
           
           // Si le résultat est true, cela signifie que le statut a été mis à jour
           if (result == true) {
-            _loadLivraisons(); // Recharger les livraisons
+            // Vérifier si la livraison doit être retirée de la liste
+            if (livraison.status != 'en_attente' && livraison.status != 'en_cours') {
+              setState(() {
+                _livraisons.removeWhere((l) => l.id == livraison.id);
+              });
+            }
           }
         },
         child: Padding(
