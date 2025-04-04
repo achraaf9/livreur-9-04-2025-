@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import '../models/bon_livraison.dart';
 import '../services/api_service.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
+import '../config/app_theme.dart';
+import '../utils/permission_utils.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class DeliveryDetailsScreen extends StatefulWidget {
   BonLivraison livraison;
@@ -52,12 +57,7 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
       final apiService = Provider.of<ApiService>(context, listen: false);
       
       // Mise à jour du statut de la livraison
-      String? commentaire;
-      
-      // Si le statut est non_livre, demander un commentaire
-      if (newStatus == 'non_livre' && _commentaireController.text.isNotEmpty) {
-        commentaire = _commentaireController.text;
-      }
+      String? commentaire = _commentaireController.text.isEmpty ? null : _commentaireController.text;
       
       final success = await apiService.updateLivraisonStatus(
         widget.livraison.id, 
@@ -155,12 +155,103 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
     }
   }
 
+  // Fonction pour appeler le client
+  Future<void> _callClient(String phoneNumber) async {
+    // Vérifier et demander la permission si nécessaire
+    bool hasPermission = await PermissionUtils.checkAndRequestPhonePermission(context);
+    if (!hasPermission) {
+      return;
+    }
+    
+    try {
+      // Nettoyer le numéro de téléphone (enlever les espaces, tirets, etc.)
+      String cleanPhoneNumber = phoneNumber.replaceAll(RegExp(r'\s+|-|\(|\)'), '');
+      
+      // Vérifier si le numéro commence par 0, le remplacer par le code pays +212 (Maroc)
+      if (cleanPhoneNumber.startsWith('0')) {
+        cleanPhoneNumber = '+212${cleanPhoneNumber.substring(1)}';
+      }
+      
+      // S'assurer que le numéro commence par +
+      if (!cleanPhoneNumber.startsWith('+')) {
+        cleanPhoneNumber = '+$cleanPhoneNumber';
+      }
+      
+      debugPrint('Essai d\'appel au numéro: $cleanPhoneNumber');
+      
+      // Essayer différentes façons de former l'URI en fonction des appareils
+      bool launched = false;
+      
+      // Méthode 1: utiliser scheme tel: avec le numéro formaté
+      try {
+        final Uri phoneUri = Uri(scheme: 'tel', path: cleanPhoneNumber);
+        launched = await launchUrl(phoneUri, mode: LaunchMode.externalApplication);
+      } catch (e) {
+        debugPrint('Méthode 1 a échoué: $e');
+      }
+      
+      // Méthode 2: utiliser une chaîne URI directe
+      if (!launched) {
+        try {
+          final String uriString = 'tel:$cleanPhoneNumber';
+          launched = await launchUrl(Uri.parse(uriString), mode: LaunchMode.externalApplication);
+        } catch (e) {
+          debugPrint('Méthode 2 a échoué: $e');
+        }
+      }
+      
+      // Méthode 3: essayer sans le signe +
+      if (!launched) {
+        try {
+          String numberWithoutPlus = cleanPhoneNumber;
+          if (numberWithoutPlus.startsWith('+')) {
+            numberWithoutPlus = numberWithoutPlus.substring(1);
+          }
+          final Uri phoneUri = Uri(scheme: 'tel', path: numberWithoutPlus);
+          launched = await launchUrl(phoneUri, mode: LaunchMode.externalApplication);
+        } catch (e) {
+          debugPrint('Méthode 3 a échoué: $e');
+        }
+      }
+      
+      if (!launched) {
+        throw Exception('Impossible de lancer l\'application téléphone');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Erreur lors de l\'appel: $e. Essayez de donner à nouveau la permission dans les paramètres de l\'application.'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            action: SnackBarAction(
+              label: 'PARAMÈTRES',
+              textColor: Colors.white,
+              onPressed: openAppSettings,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails de la livraison'),
-        backgroundColor: Colors.blue,
+        backgroundColor: AppTheme.primaryColor,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -172,19 +263,40 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                   // Carte d'information du client
                   Card(
                     elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Informations du client',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.person,
+                                  color: AppTheme.primaryColor,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Informations du client',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.darkColor,
+                                ),
+                              ),
+                            ],
                           ),
-                          const Divider(),
+                          const Divider(height: 24),
                           _buildInfoRow('Nom', widget.livraison.clientPrenom.isNotEmpty 
                               ? '${widget.livraison.clientPrenom} ${widget.livraison.clientNom}'
                               : widget.livraison.clientNom),
@@ -204,34 +316,81 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                   // Carte d'information de la commande
                   Card(
                     elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Informations de la commande',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.secondaryColor.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.receipt_long,
+                                  color: AppTheme.secondaryColor,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Informations de la commande',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.darkColor,
+                                ),
+                              ),
+                            ],
                           ),
-                          const Divider(),
+                          const Divider(height: 24),
                           _buildInfoRow('Référence', widget.livraison.reference),
                           _buildInfoRow('Date de commande', widget.livraison.dateCommande),
                           _buildInfoRow('Date de livraison', widget.livraison.dateLivraison),
                           _buildInfoRow('Montant total', '${widget.livraison.montantTotal.toStringAsFixed(2)} DH'),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           Row(
                             children: [
                               const Text('Statut:', style: TextStyle(fontWeight: FontWeight.bold)),
-                              const SizedBox(width: 8),
-                              Chip(
-                                label: Text(
-                                  _getStatusText(_selectedStatus),
-                                  style: const TextStyle(color: Colors.white),
+                              const SizedBox(width: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: _getStatusColor(_selectedStatus).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: _getStatusColor(_selectedStatus).withOpacity(0.3),
+                                    width: 1,
+                                  ),
                                 ),
-                                backgroundColor: _getStatusColor(_selectedStatus),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _selectedStatus == 'livre' 
+                                        ? Icons.check_circle 
+                                        : _selectedStatus == 'non_livre' 
+                                          ? Icons.cancel 
+                                          : Icons.pending,
+                                      size: 16,
+                                      color: _getStatusColor(_selectedStatus),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _getStatusText(_selectedStatus),
+                                      style: TextStyle(
+                                        color: _getStatusColor(_selectedStatus),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -244,26 +403,83 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                   // Champ de commentaire
                   Card(
                     elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Commentaire',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.accentColor.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.comment,
+                                  color: AppTheme.accentColor,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Commentaire',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.darkColor,
+                                ),
+                              ),
+                            ],
                           ),
-                          const Divider(),
+                          const Divider(height: 24),
                           TextField(
                             controller: _commentaireController,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Ajouter un commentaire',
-                              border: OutlineInputBorder(),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                                borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
                             ),
                             maxLines: 3,
+                          ),
+                          const SizedBox(height: 16),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                if (_commentaireController.text.isNotEmpty) {
+                                  // Sauvegarder le commentaire ici
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Commentaire enregistré'),
+                                      backgroundColor: AppTheme.successColor,
+                                    ),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.save),
+                              label: const Text('Enregistrer'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryColor,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppTheme.buttonRadius),
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -272,22 +488,50 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                   const SizedBox(height: 24),
 
                   // Boutons d'action
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildActionButton(
-                        _selectedStatus == 'livre' ? 'Déjà livré' : 'Livré',
-                        Colors.green,
-                        _selectedStatus == 'livre' ? Icons.check_circle : Icons.check_circle_outline,
-                        () => _updateStatus('livre'),
-                      ),
-                      _buildActionButton(
-                        _selectedStatus == 'non_livre' ? 'Déjà marqué comme non livré' : 'Non livré',
-                        Colors.red,
-                        _selectedStatus == 'non_livre' ? Icons.cancel : Icons.cancel_outlined,
-                        () => _updateStatus('non_livre'),
-                      ),
-                    ],
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0, bottom: 24.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _selectedStatus == 'livre' ? null : () => _updateStatus('livre'),
+                            icon: Icon(_selectedStatus == 'livre' ? Icons.check_circle : Icons.check_circle_outline),
+                            label: Text(_selectedStatus == 'livre' ? 'Déjà livré' : 'Livré'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.successColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppTheme.buttonRadius),
+                              ),
+                              disabledBackgroundColor: Colors.grey[300],
+                              disabledForegroundColor: Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _selectedStatus == 'non_livre' ? null : () => _updateStatus('non_livre'),
+                            icon: Icon(_selectedStatus == 'non_livre' ? Icons.cancel : Icons.cancel_outlined),
+                            label: Text(_selectedStatus == 'non_livre' ? 'Déjà non livré' : 'Non livré'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.errorColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppTheme.buttonRadius),
+                              ),
+                              disabledBackgroundColor: Colors.grey[300],
+                              disabledForegroundColor: Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -296,6 +540,9 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
   }
 
   Widget _buildInfoRow(String label, String value) {
+    // Vérifier si c'est un numéro de téléphone
+    bool isPhoneNumber = label.toLowerCase() == 'téléphone';
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -309,23 +556,42 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
             ),
           ),
           Expanded(
-            child: Text(value),
+            child: isPhoneNumber
+                ? InkWell(
+                    onTap: () => _callClient(value),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            value,
+                            style: const TextStyle(
+                              color: AppTheme.primaryColor,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.successColor.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppTheme.successColor.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.call,
+                            size: 16,
+                            color: AppTheme.successColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Text(value),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton(String label, Color color, IconData icon, VoidCallback onPressed) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        disabledBackgroundColor: Colors.grey,
       ),
     );
   }

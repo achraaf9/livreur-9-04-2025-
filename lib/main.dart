@@ -7,7 +7,9 @@ import 'screens/home_screen.dart';
 import 'models/agent.dart';
 import 'package:flutter/foundation.dart';
 import 'config/api_config.dart';
+import 'config/app_theme.dart';
 import 'dart:developer' as developer;
+import 'utils/permission_utils.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,14 +52,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Application de Livraison',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-        ),
-      ),
+      theme: AppTheme.lightTheme(),
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -67,12 +62,38 @@ class MyApp extends StatelessWidget {
       supportedLocales: const [
         Locale('fr'),
       ],
-      home: const LoginScreen(),
+      home: const PermissionsWrapper(child: LoginScreen()),
       routes: {
         '/login': (context) => const LoginScreen(),
         // Les routes vers HomeScreen et autres écrans qui nécessitent un agent
         // sont gérées dynamiquement après la connexion
       },
     );
+  }
+}
+
+/// Widget wrapper qui gère l'affichage des informations sur les permissions
+class PermissionsWrapper extends StatefulWidget {
+  final Widget child;
+  
+  const PermissionsWrapper({Key? key, required this.child}) : super(key: key);
+  
+  @override
+  State<PermissionsWrapper> createState() => _PermissionsWrapperState();
+}
+
+class _PermissionsWrapperState extends State<PermissionsWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    // Vérifier les permissions après construction du widget
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PermissionUtils.checkAllPermissions(context);
+    });
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
   }
 } 

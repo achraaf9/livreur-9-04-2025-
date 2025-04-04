@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.liv_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "29.0.13113456"  // Version NDK installée
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
