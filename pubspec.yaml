@@ -24,11 +24,34 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icons/icons8-livraison-réussie-50 (1).png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icons/icons8-livraison-réussie-50 (1).png"
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "assets/icons/icons8-livraison-réussie-50 (1).png"
+    background_color: "#FFFFFF"
+    theme_color: "#FFFFFF"
+  windows:
+    generate: true
+    image_path: "assets/icons/icons8-livraison-réussie-50 (1).png"
+    icon_size: 48
+  macos:
+    generate: true
+    image_path: "assets/icons/icons8-livraison-réussie-50 (1).png"
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/icons/
   # assets:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg

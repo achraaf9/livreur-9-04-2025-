@@ -453,34 +453,6 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                             ),
                             maxLines: 3,
                           ),
-                          const SizedBox(height: 16),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                if (_commentaireController.text.isNotEmpty) {
-                                  // Sauvegarder le commentaire ici
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Commentaire enregistré'),
-                                      backgroundColor: AppTheme.successColor,
-                                    ),
-                                  );
-                                }
-                              },
-                              icon: const Icon(Icons.save),
-                              label: const Text('Enregistrer'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryColor,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(AppTheme.buttonRadius),
-                                ),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),

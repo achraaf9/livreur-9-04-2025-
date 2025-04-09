@@ -333,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -344,7 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Text(
                         '$greeting,',
-                  style: const TextStyle(
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
                         ),
@@ -366,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
-                    fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -382,7 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         Container(
                           width: 8,
                           height: 8,
-              decoration: const BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: Colors.greenAccent,
                             shape: BoxShape.circle,
                           ),
@@ -414,26 +414,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   CircleAvatar(
                     backgroundColor: Colors.white.withOpacity(0.2),
                     child: IconButton(
-                      icon: const Icon(Icons.call, color: Colors.white),
-                      tooltip: 'Vérifier permission téléphone',
-                      onPressed: () {
-                        PermissionUtils.checkPhonePermissionStatus(context);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  CircleAvatar(
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    child: IconButton(
                       icon: const Icon(Icons.logout, color: Colors.white),
                       tooltip: 'Déconnexion',
                       onPressed: () {
                         _showLogoutConfirmationDialog();
                       },
                     ),
-            ),
-          ],
-        ),
+                  ),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -445,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-                  children: [
+              children: [
                 const Icon(
                   Icons.calendar_today,
                   color: Colors.white,
@@ -454,7 +443,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 6),
                 Text(
                   'Aujourd\'hui: ${_getCurrentDate()}',
-                          style: const TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
                   ),
@@ -565,6 +554,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Carte de statistique individuelle
   Widget _buildStatCard(String title, String value, Color color, IconData icon, String subtitle) {
+    // Déterminer le statut en fonction du titre
+    String status = '';
+    if (title == 'En attente') {
+      status = 'en_attente';
+    } else if (title == 'Livrées') {
+      status = 'livre';
+    } else if (title == 'Non livrées') {
+      status = 'non_livre';
+    } else {
+      status = 'all'; // Pour "Total"
+    }
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -607,18 +608,35 @@ class _HomeScreenState extends State<HomeScreen> {
                   size: 20,
                 ),
               ),
-              Container(
-                height: 24,
-                width: 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: color.withOpacity(0.1),
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.arrow_forward_ios,
-                    color: color,
-                    size: 12,
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedIndex = 2; // Index de l'écran d'historique
+                  });
+                  // Naviguer vers l'historique avec le filtre approprié
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DeliveryHistoryScreen(
+                        agent: widget.agent,
+                        initialFilter: status,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  height: 24,
+                  width: 40,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: color.withOpacity(0.1),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.arrow_forward_ios,
+                      color: color,
+                      size: 12,
+                    ),
                   ),
                 ),
               ),
@@ -627,9 +645,9 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 16),
           Text(
             value,
-                          style: TextStyle(
+            style: TextStyle(
               fontSize: 28,
-                            fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.bold,
               color: color,
             ),
           ),
